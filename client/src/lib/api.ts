@@ -272,6 +272,11 @@ export interface CreateAssetInput {
   name: string;
   type: AssetType;
   description: string;
+  fileName?: string;
+  fileSize?: number;
+  contentType?: string;
+  fileHash?: string;
+  storageRef?: string;
 }
 
 export interface GrantInput {
@@ -408,6 +413,11 @@ export const api = {
         status: "PENDING",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        fileName: input.fileName,
+        fileSize: input.fileSize,
+        contentType: input.contentType,
+        fileHash: input.fileHash,
+        storageRef: input.storageRef,
       };
       db.assets.unshift(asset);
       recordEvent(db, "ASSET_CREATED", "ASSET", asset.id, asset.name);

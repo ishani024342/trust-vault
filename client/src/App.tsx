@@ -7,6 +7,7 @@ import { RoleConsole } from "./components/RoleConsole";
 import NotFound from "./pages/NotFound";
 import { clearSession, getSession } from "./lib/auth";
 import { api } from "./lib/api";
+import { AssetDocument } from "./components/AssetDocument";
 
 const nodes = [
   ["01", "DID", "decentralized identifier", "did"],

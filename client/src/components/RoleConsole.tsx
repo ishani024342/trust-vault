@@ -1,13 +1,13 @@
 /* Samvid role-console style: light editorial surfaces, restrained proof colors, and controls that reflect backend role boundaries. */
 import { useEffect, useState } from "react";
-import { ArrowRight, Ban, Check, ChevronRight, CircleAlert, FilePlus2, KeyRound, Lock, LogOut, Send, ShieldCheck, Trash2, UserCog, WalletCards } from "lucide-react";
+import { ArrowRight, Ban, Check, ChevronRight, CircleAlert, FileIcon, FilePlus2, KeyRound, Lock, LogOut, Send, ShieldCheck, Trash2, UserCog, WalletCards } from "lucide-react";
+import { AssetDocument } from "./AssetDocument";
 import { IdentityScene } from "./IdentityScene";
 import { api, accountStorageKey, assetTypeLabel, type LocalAccountState } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { formatDate, shortHash, titleCase } from "@/lib/format";
-import type { Asset, AuditEvent, Grant, Permission, Role as URole } from "@/lib/types";
-
+import type { AuditEvent, Asset, AssetType, Grant, Permission, Role as URole } from "@/lib/types";
 type Role = "user" | "manager" | "admin" | "auditor";
 type AdminView = "dashboard" | "users" | "roles" | "assets" | "audit";
 type UserView = "dashboard" | "assets" | "asset-detail" | "access" | "audit" | "create" | "identity-edit";
@@ -158,7 +158,66 @@ function AssetActions({ asset, role, email, reload }: { asset: Asset; role: Role
 function UserAssetDetailPage({ email, id, role }: { email: string; id: string; role: Role }) {
   const asset = useLoad(() => api.getAsset(id), [id]);
   if (asset.data === null && !asset.loading) return <section className="console-card"><div className="empty-state"><strong>Record not found.</strong><span>{id} is not attached to this account.</span><a className="console-link" href="/console/user/assets">← Back to my assets</a></div></section>;
-  return <section className="console-card user-page"><div className="console-card-head"><div><span className="console-kicker">ASSET RECORD / {id}</span><h2>{asset.data?.name ?? "Loading record…"}</h2><p>{asset.data?.description}</p></div><a className="console-link" href="/console/user/assets">← Back to assets</a></div><Block loading={asset.loading} error={asset.error}>{asset.data && <><div className="asset-detail-grid"><div className="detail-facts"><div><span>OWNER</span><strong>{asset.data.ownerName}</strong></div><div><span>ACCOUNT</span><strong>{asset.data.ownerEmail}</strong></div><div><span>DID</span><strong>{shortHash(asset.data.ownerDid, 10, 6) || "did:sv:pending"}</strong></div><div><span>TYPE</span><strong>{assetTypeLabel(asset.data.type)}</strong></div><div><span>STATUS</span><strong className={asset.data.status === "VERIFIED" ? "allowed" : "blocked"}>{asset.data.status}</strong></div><div><span>CREATED</span><strong>{formatDate(asset.data.createdAt)}</strong></div></div><div className="detail-nft"><span className="console-kicker">NFT / OWNERSHIP PROOF</span>{asset.data.nft ? <><div><span>TOKEN ID</span><strong>#{asset.data.nft.tokenId}</strong></div><div><span>CONTRACT</span><strong>{shortHash(asset.data.nft.contractAddress, 8, 6)}</strong></div><div><span>TRANSACTION</span><strong>{shortHash(asset.data.nft.transactionHash, 8, 6)}</strong></div><div><span>NETWORK</span><strong>{asset.data.nft.network}</strong></div><div><span>MINTED</span><strong>{formatDate(asset.data.nft.mintedAt)}</strong></div></> : <div className="empty-state"><strong>Not minted yet.</strong><span>This record has no on-chain proof until it is minted.</span></div>}</div></div><AssetActions asset={asset.data} role={role} email={email} reload={asset.reload} /></>}</Block></section>;
+  return <section className="console-card user-page"><div className="console-card-head"><div><span className="console-kicker">ASSET RECORD / {id}</span><h2>{asset.data?.name ?? "Loading record…"}</h2><p>{asset.data?.description}</p></div><a className="console-link" href="/console/user/assets">← Back to assets</a></div><Block loading={asset.loading} error={asset.error}>{asset.data && <>    <div className="asset-detail-grid"><div className="detail-facts"><div><span>OWNER</span><strong>{asset.data.ownerName}</strong></div><div><span>ACCOUNT</span><strong>{asset.data.ownerEmail}</strong></div><div><span>DID</span><strong>{shortHash(asset.data.ownerDid, 10, 6) || "did:sv:pending"}</strong></div><div><span>TYPE</span><strong>{assetTypeLabel(asset.data.type)}</strong></div><div><span>STATUS</span><strong className={asset.data.status === "VERIFIED" ? "allowed" : "blocked"}>{asset.data.status}</strong></div><div><span>CREATED</span><strong>{formatDate(asset.data.createdAt)}</strong></div></div><div className="detail-nft"><span className="console-kicker">NFT / OWNERSHIP PROOF</span>{asset.data.nft ? <><div><span>TOKEN ID</span><strong>#{asset.data.nft.tokenId}</strong></div><div><span>CONTRACT</span><strong>{shortHash(asset.data.nft.contractAddress, 8, 6)}</strong></div><div><span>TRANSACTION</span><strong>{shortHash(asset.data.nft.transactionHash, 8, 6)}</strong></div><div><span>NETWORK</span><strong>{asset.data.nft.network}</strong></div><div><span>MINTED</span><strong>{formatDate(asset.data.nft.mintedAt)}</strong></div></> : <div className="empty-state"><strong>Not minted yet.</strong><span>This record has no on-chain proof until it is minted.</span></div>}</div></div><AssetDocument asset={asset.data} /><AssetActions asset={asset.data} role={role} email={email} reload={asset.reload} /></>}</Block></section>;
+}
+
+function AssetDocumentInline({ asset }: { asset: Asset }) {
+  return <AssetDocument asset={asset} />;
+  if (!asset.fileName) return null;
+  const kb = Math.round((asset.fileSize ?? 0) / 1024);
+  const typeLabel = asset.contentType || "application/octet-stream";
+  return (
+    <div className="asset-document">
+      <span className="console-kicker">ATTACHED DOCUMENT</span>
+      <div className="file-chip file-ok">
+        <FileIcon size={12} />
+        <span>
+          {asset.fileName}<br />
+          <small>{kb} KB · {typeLabel}</small>
+        </span>
+      </div>
+      {asset.storageRef && (
+        <div className="asset-file-note">
+          <span className="console-kicker">STORE</span>
+          <span>Backend storage path: {asset.storageRef}</span>
+        </div>
+      )}
+      {asset.fileHash && (
+        <div className="asset-file-note">
+          <span className="console-kicker">VERIFICATION</span>
+          <span>File hash recorded: {asset.fileHash}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function filePreviewMarkup(form: {
+  fileName: string;
+  fileSize: number;
+  contentType: string;
+  file: File | null;
+}, ok: boolean, email: string) {
+  if (!form.fileName) return null;
+  const kb = Math.round(form.fileSize / 1024);
+  const typeLabel = form.contentType || "application/octet-stream";
+  return (
+    <div className="asset-file-preview">
+      <div className={`file-chip ${ok ? "file-ok" : "file-warn"}`}>
+        <FileIcon size={12} />
+        <span>
+          {form.fileName}<br />
+          <small>{kb} KB · {typeLabel}</small>
+        </span>
+      </div>
+      {ok && (
+        <div className="asset-file-note">
+          <span className="console-kicker">ATTACHED TO THIS RECORD</span>
+          <span>When the backend is wired, this file will be stored for {email} and linked to the asset above.</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function UserAccessPage({ email, role }: { email: string; role: Role }) {
@@ -183,19 +242,173 @@ function IdentityEditPage({ email }: { email: string }) {
 }
 
 function CreateAssetPage({ email }: { email: string }) {
-  const [form, setForm] = useState({ name: "", type: "DOCUMENT", description: "" });
+  const [form, setForm] = useState<{
+    name: string;
+    type: AssetType;
+    description: string;
+    file: File | null;
+    fileName: string;
+    fileSize: number;
+    contentType: string;
+    fileHash: string;
+  }>({ name: "", type: "DOCUMENT", description: "", file: null, fileName: "", fileSize: 0, contentType: "", fileHash: "" });
   const [saved, setSaved] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const maxFileBytes = 15 * 1024 * 1024;
+  const allowedDocTypes = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "image/png",
+    "image/jpeg",
+  ];
+
+  const selectedFileOk = form.file &&
+    allowedDocTypes.includes(form.contentType.trim().toLowerCase()) &&
+    form.fileSize > 0 &&
+    form.fileSize <= maxFileBytes;
+
+  const readFully = (blob: Blob): Promise<ArrayBuffer> => blob.arrayBuffer();
+
+  const hashHex = async (blob: Blob): Promise<string> => {
+    const buffer = await readFully(blob);
+    let h = 0;
+    const view = new DataView(buffer);
+    for (let i = 0; i < view.byteLength; i++) {
+      h = (h * 31 + view.getUint8(i)) >>> 0;
+    }
+    const hex = h.toString(16).padStart(8, "0").toUpperCase();
+    return `${hex}…${hex.slice(-4)}`;
+  };
+
+  const fileChanged = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setForm({ ...form, file: null, fileName: "", fileSize: 0, contentType: "", fileHash: "" });
+      return;
+    }
+    if (!allowedDocTypes.includes(file.type.trim().toLowerCase())) {
+      setMsg({ ok: false, text: "Please choose a document, image, or plain-text file." });
+      return;
+    }
+    if (file.size > maxFileBytes) {
+      setMsg({ ok: false, text: "File is too large. Maximum is 15 MB." });
+      return;
+    }
+    setMsg(null);
+    const hash = await hashHex(file);
+    setForm({
+      ...form,
+      file,
+      fileName: file.name,
+      fileSize: file.size,
+      contentType: file.type,
+      fileHash: hash,
+    });
+  };
+
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!selectedFileOk && form.file) {
+      setMsg({ ok: false, text: "Please choose a supported document file." });
+      return;
+    }
     try {
-      const asset = await api.createAsset({ name: form.name, type: form.type as Asset["type"], description: form.description });
+      const asset = await api.createAsset({
+        name: form.name,
+        type: form.type as Asset["type"],
+        description: form.description,
+        fileName: form.fileName,
+        fileSize: form.fileSize,
+        contentType: form.contentType,
+        fileHash: form.fileHash,
+        storageRef: form.fileName ? `/uploads/${email.toLowerCase()}/${form.fileName}` : undefined,
+      });
       setSaved(asset.id);
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "Save failed" });
     }
   };
-  return <section className="console-card create-asset-page"><div className="console-card-head"><div><span className="console-kicker">USER ASSET / NEW RECORD</span><h2>Create an asset.</h2></div><a className="console-link" href="/console/user">← Back to dashboard</a></div>{saved ? <div className="asset-success"><strong>{form.name} is attached to your identity.</strong><span>Record {saved} is saved for {email} and is awaiting verification.</span><a className="console-link" href="/console/user/assets">View my assets <ArrowRight size={13} /></a></div> : <form className="asset-create-form" onSubmit={submit}><label><span>ASSET NAME</span><input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} placeholder="e.g. Identity passport" /></label><label><span>ASSET TYPE</span><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="DOCUMENT">VERIFIABLE DOCUMENT</option><option value="CERTIFICATE">NFT / PROOF</option><option value="ACCESS_MANIFEST">ACCESS MANIFEST</option><option value="CREDENTIAL">CREDENTIAL</option></select></label><label><span>DESCRIPTION</span><textarea required minLength={12} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} placeholder="Describe what this asset proves." /></label><ActionMsg msg={msg} /><div className="registration-actions"><button className="register-submit" type="submit">SAVE ASSET <ArrowRight size={15} /></button><a className="cancel-submit" href="/console/user">CANCEL</a></div></form>}</section>;
+
+  return (
+    <section className="console-card create-asset-page">
+      <div className="console-card-head">
+        <div>
+          <span className="console-kicker">USER ASSET / NEW RECORD</span>
+          <h2>Create an asset.</h2>
+        </div>
+        <a className="console-link" href="/console/user">← Back to dashboard</a>
+      </div>
+      {saved ? (
+        <div className="asset-success">
+          <strong>{form.name} is attached to your identity.</strong>
+          <span>Record {saved} is saved for {email} and is awaiting verification.</span>
+          <a className="console-link" href="/console/user/assets">View my assets <ArrowRight size={13} /></a>
+        </div>
+      ) : (
+        <form className="asset-create-form" onSubmit={submit}>
+          <label>
+            <span>ASSET NAME</span>
+            <input
+              required
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              placeholder="e.g. Identity passport"
+            />
+          </label>
+          <label>
+            <span>ASSET TYPE</span>
+            <select
+              value={form.type}
+              onChange={(event) => setForm({ ...form, type: event.target.value as AssetType })}
+            >
+              <option value="DOCUMENT">VERIFIABLE DOCUMENT</option>
+              <option value="CERTIFICATE">NFT / PROOF</option>
+              <option value="ACCESS_MANIFEST">ACCESS MANIFEST</option>
+              <option value="CREDENTIAL">CREDENTIAL</option>
+            </select>
+          </label>
+          <label>
+            <span>DESCRIPTION</span>
+            <textarea
+              required
+              minLength={12}
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+              placeholder="Describe what this asset proves."
+            />
+          </label>
+          <label>
+            <span>ATTACH DOCUMENT <span style={{ opacity: 0.55 }}>optional</span></span>
+            <input
+              type="file"
+              accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/png,image/jpeg"
+              onChange={fileChanged}
+              disabled={!!form.file}
+            />
+          </label>
+          {filePreviewMarkup(form, selectedFileOk ? true : false, email)}
+          <ActionMsg msg={msg} />
+          <div className="registration-actions">
+            <button
+              className="register-submit"
+              type="submit"
+              disabled={!form.file && !form.description.trim()}
+            >
+              SAVE ASSET <ArrowRight size={15} />
+            </button>
+            <a className="cancel-submit" href="/console/user">CANCEL</a>
+          </div>
+        </form>
+      )}
+    </section>
+  );
 }
 
 function UserConsole({ email, role, view }: { email: string; role: Role; view: UserView }) {

@@ -60,6 +60,11 @@ export interface Asset {
   storageRef?: string;
   metadata?: Record<string, string>;
   nft?: NftRecord;
+  /** Attached document recorded for this asset, when one was uploaded. */
+  fileName?: string;
+  fileSize?: number;
+  contentType?: string;
+  fileHash?: string;
 }
 
 export interface Grant {
@@ -130,6 +135,17 @@ export interface DashboardStats {
   totalUsers: number;
   pendingAssets: number;
   recentActivity: number;
+}
+
+export interface CreateAssetInput {
+  name: string;
+  type: AssetType;
+  description: string;
+  fileName?: string;
+  fileSize?: number;
+  contentType?: string;
+  fileHash?: string;
+  storageRef?: string;
 }
 
 export interface AuthResponse {
