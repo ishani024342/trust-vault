@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { IdentityScene } from "./components/IdentityScene";
 import { RoleConsole } from "./components/RoleConsole";
 import NotFound from "./pages/NotFound";
-import { clearSession, getSession } from "./lib/auth";
-import { api } from "./lib/api";
+import { clearSession, getSession, getToken, setSession, type Session } from "./lib/auth";
+import { api, isRemote } from "./lib/api";
 import { AssetDocument } from "./components/AssetDocument";
 
 const nodes = [
@@ -85,9 +85,34 @@ function RoleModal({ onClose, startStep }: { onClose: () => void; startStep: "re
   const [selected, setSelected] = useState("User");
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const routeToRole = (roleValue: string) => { const role = roleValue.toLowerCase(); const slug = role === "admin" ? "admin" : role === "auditor" ? "auditor" : role === "manager" ? "manager" : "user"; window.location.href = `/console/${slug}`; };
-  const submitRegistration = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; } if (form.password !== form.confirm) { setError("Passwords do not match."); return; } localStorage.setItem("trustvault.pendingRegistration", JSON.stringify({ name: form.name, email: form.email })); setError(""); setStep("role"); };
-  const submitLogin = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); try { await api.login(form.email, form.password); routeToRole(getSession()?.role ?? "USER"); } catch (loginError) { setError(loginError instanceof Error ? loginError.message : "Login failed. Please try again."); } };
+  const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (form.password !== form.confirm) { setError("Passwords do not match."); return; }
+    setBusy(true); setError("");
+    try {
+      if (isRemote) {
+        // The backend registers the account and returns the JWT + user (role included).
+        await api.register({ name: form.name, email: form.email, password: form.password, role: "USER" });
+        routeToRole(getSession()?.role ?? "USER");
+        return;
+      }
+      localStorage.setItem("trustvault.pendingRegistration", JSON.stringify({ name: form.name, email: form.email }));
+      setStep("role");
+    } catch (registerError) {
+      setError(registerError instanceof Error ? registerError.message : "Registration failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try { await api.login(form.email, form.password); routeToRole(getSession()?.role ?? "USER"); }
+    catch (loginError) { setError(loginError instanceof Error ? loginError.message : "Login failed. Please try again."); }
+    finally { setBusy(false); }
+  };
   const continueToConsole = () => { const pending = localStorage.getItem("trustvault.pendingRegistration"); const parsed = pending ? JSON.parse(pending) as { name?: string; email: string } : null; setSessionLocal(selected, parsed); routeToRole(selected); };
   const setSessionLocal = (roleValue: string, pending: { name?: string; email: string } | null) => {
     const email = pending?.email ?? form.email;
@@ -102,13 +127,13 @@ function RoleModal({ onClose, startStep }: { onClose: () => void; startStep: "re
         <h2 id="role-title">Log in to Samvid</h2>
         <p>Use the account credentials returned by the authentication service to enter your role console.</p>
         <div className="flow-tabs"><span className="active">LOG IN</span><span>REGISTER</span></div>
-        <form className="registration-form" onSubmit={submitLogin}><label><span>EMAIL</span><input required type="email" autoComplete="email" placeholder="you@organisation.in" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label><span>PASSWORD</span><input required minLength={8} type="password" autoComplete="current-password" placeholder="••••••••" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label><button type="button" className="forgot-password" onClick={() => setError("Password reset will use the authentication service connected to this project.")}>Forgot password?</button>{error && <p className="form-error" role="alert">{error}</p>}<div className="registration-actions"><button className="register-submit" type="submit">LOG IN <ShieldCheck size={15} /></button><button className="cancel-submit" type="button" onClick={() => { setError(""); setStep("register"); }}>REGISTER</button></div></form>
+        <form className="registration-form" onSubmit={submitLogin}><label><span>EMAIL</span><input required type="email" autoComplete="email" placeholder="you@organisation.in" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label><span>PASSWORD</span><input required minLength={8} type="password" autoComplete="current-password" placeholder="••••••••" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label><button type="button" className="forgot-password" onClick={() => setError("Password reset will use the authentication service connected to this project.")}>Forgot password?</button>{error && <p className="form-error" role="alert">{error}</p>}<div className="registration-actions"><button className="register-submit" type="submit" disabled={busy}>LOG IN <ShieldCheck size={15} /></button><button className="cancel-submit" type="button" onClick={() => { setError(""); setStep("register"); }}>REGISTER</button></div></form>
       </> : step === "register" ? <>
         <div className="modal-kicker"><span className="rule" /> TRUSTED ENTRY</div>
         <h2 id="role-title">Create your identity</h2>
         <p>Your authenticated account determines your DID, role, permissions and resources.</p>
         <div className="flow-tabs"><span className="active">REGISTER</span><span>CHOOSE ROLE</span></div>
-        <form className="registration-form" onSubmit={submitRegistration}><label><span>NAME</span><input required autoComplete="name" placeholder="Your real name" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label><span>EMAIL</span><input required type="email" autoComplete="email" placeholder="you@organisation.in" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label><span>PASSWORD <small>(8+ characters)</small></span><input required minLength={8} type="password" autoComplete="new-password" placeholder="••••••••" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label><label><span>CONFIRM PASSWORD</span><input required minLength={8} type="password" autoComplete="new-password" placeholder="••••••••" value={form.confirm} onChange={event => setForm({ ...form, confirm: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="registration-actions"><button className="register-submit" type="submit">REGISTER <ShieldCheck size={15} /></button><button className="cancel-submit" type="button" onClick={onClose}>CANCEL</button></div></form>
+        <form className="registration-form" onSubmit={submitRegistration}><label><span>NAME</span><input required autoComplete="name" placeholder="Your real name" value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label><span>EMAIL</span><input required type="email" autoComplete="email" placeholder="you@organisation.in" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label><span>PASSWORD <small>(8+ characters)</small></span><input required minLength={8} type="password" autoComplete="new-password" placeholder="••••••••" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label><label><span>CONFIRM PASSWORD</span><input required minLength={8} type="password" autoComplete="new-password" placeholder="••••••••" value={form.confirm} onChange={event => setForm({ ...form, confirm: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="registration-actions"><button className="register-submit" type="submit" disabled={busy}>REGISTER <ShieldCheck size={15} /></button><button className="cancel-submit" type="button" onClick={onClose}>CANCEL</button></div></form>
       </> : <>
         <div className="modal-kicker"><span className="rule" /> AUTHORITY CHECK / 01</div>
         <h2 id="role-title">Choose your role</h2>
@@ -139,7 +164,35 @@ function NetworkTag() {
   return <span className="net-tag">NETWORK · {network}</span>;
 }
 
+/** In remote mode, validates the stored JWT with GET /auth/me on mount and
+ * clears the session cleanly when the token is expired or invalid. */
+function useSessionGate() {
+  const [restoring, setRestoring] = useState(() => isRemote && Boolean(getToken()));
+  useEffect(() => {
+    if (!isRemote) return;
+    const token = getToken();
+    if (!token) return;
+    let cancelled = false;
+    api.fetchMe().then((me) => {
+      if (cancelled) return;
+      if (me) {
+        const current = getSession();
+        if (current) setSession({ ...current, name: me.name ?? current.name, role: (me.role ?? current.role) as Session["role"], userId: me.id ?? current.userId, did: me.did ?? current.did });
+      } else {
+        // Invalid/expired token: clear auth state so the UI returns to signed-out.
+        clearSession();
+      }
+      setRestoring(false);
+    }).catch(() => { if (!cancelled) setRestoring(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { restoring };
+}
+
 export default function App() {
+  // Always-callable hook so the component never violates the rules of hooks,
+  // regardless of which branch renders below.
+  const sessionState = useSessionGate();
   const path = window.location.pathname;
   if (path.startsWith("/console/")) {
     const role = path.split("/")[2] as (typeof consoleRoles)[number];
@@ -152,7 +205,7 @@ export default function App() {
   if (path === "/did/create") return <Redirect to="/console/user/identity/edit" />;
   if (path === "/404") return <NotFound />;
   const [modal, setModal] = useState<"register" | "login" | null>(null);
-  const session = getSession();
+  const session = sessionState.restoring ? null : getSession();
   const landing = (
     <div className="site-shell">
       <header className="topbar"><div className="brand-lockup"><img src="/brand/samvid-logo.png" alt="Samvid logo" /><strong>SAMVID</strong></div><nav><NetworkTag />{session ? <button onClick={() => { clearSession(); window.location.href = "/"; }}>Sign out</button> : <button onClick={() => setModal("login")}>Log in</button>}{session ? <button className="dark-button" onClick={() => window.location.href = `/console/${session.role.toLowerCase()}`}>Open console <ArrowRight size={15} /></button> : <button className="dark-button" onClick={() => setModal("register")}>Create account <ArrowRight size={15} /></button>}</nav></header>

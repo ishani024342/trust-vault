@@ -51,12 +51,15 @@ export interface Asset {
   name: string;
   type: AssetType;
   description: string;
+  /** Backend owner id (User.id) when provided by the API. */
+  ownerId?: string;
   ownerName: string;
   ownerEmail: string;
   ownerDid: string;
   status: AssetStatus;
   createdAt: string;
   updatedAt: string;
+  /** Backend storageKey, surfaced through the existing storageRef field. */
   storageRef?: string;
   metadata?: Record<string, string>;
   nft?: NftRecord;
@@ -65,6 +68,17 @@ export interface Asset {
   fileSize?: number;
   contentType?: string;
   fileHash?: string;
+}
+
+/** On-chain registration info returned by GET /assets/:id/blockchain. */
+export interface BlockchainInfo {
+  registered: boolean;
+  status?: string;
+  transactionHash?: string;
+  blockNumber?: number;
+  network?: string;
+  contractAddress?: string;
+  registeredAt?: string;
 }
 
 export interface Grant {
@@ -151,4 +165,11 @@ export interface CreateAssetInput {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface RegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  role?: Role;
 }
